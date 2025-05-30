@@ -208,7 +208,7 @@ export default function KnowledgeGraph() {
   };
 
   return (
-    <div className="h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div className="h-screen bg-gray-900 text-gray-100">
       <div className="h-full flex">
         <AudioRecordingPanel
           textInput={textInput}
@@ -225,14 +225,7 @@ export default function KnowledgeGraph() {
           <div className="flex-1 relative">
             {nodes.length === 0 && !isProcessing ? (
               <div className="h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-gray-400 text-lg mb-2">
-                    No graph data yet
-                  </div>
-                  <div className="text-gray-500 text-sm">
-                    Enter some text and click send to generate a knowledge graph
-                  </div>
-                </div>
+                {/* Empty state - no message */}
               </div>
             ) : isProcessing ? (
               <div className="h-full flex items-center justify-center">
