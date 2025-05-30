@@ -35,37 +35,27 @@ export default function KnowledgeGraph() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  // Debug environment variables
-  console.log("Environment check:", {
-    hasGoogleApiKey: !!process.env.GOOGLE_API_KEY,
-    hasNextPublicGoogleApiKey: !!process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
-    nodeEnv: process.env.NODE_ENV,
-  });
-
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
 
-  if (!apiKey) {
-    console.error(
-      "No API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in Vercel environment variables."
-    );
-  }
+  const llm = useMemo(() => {
+    if (!apiKey) {
+      console.error(
+        "No API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in Vercel environment variables."
+      );
+      return null;
+    }
+    return new ChatGoogleGenerativeAI({
+      model: "gemini-2.0-flash",
+      apiKey: apiKey,
+    });
+  }, [apiKey]);
 
-  const llm = useMemo(
-    () =>
-      new ChatGoogleGenerativeAI({
-        model: "gemini-2.0-flash",
-        apiKey: apiKey,
-      }),
-    [apiKey]
-  );
-
-  const llmTransformer = useMemo(
-    () =>
-      new LLMGraphTransformer({
-        llm: llm,
-      }),
-    [llm]
-  );
+  const llmTransformer = useMemo(() => {
+    if (!llm) return null;
+    return new LLMGraphTransformer({
+      llm: llm,
+    });
+  }, [llm]);
 
   const startRecording = async () => {
     try {
@@ -113,6 +103,11 @@ export default function KnowledgeGraph() {
 
   const processAudioToText = async (audioBlob: Blob) => {
     try {
+      if (!llm) {
+        console.error("LLM not initialized - API key missing");
+        return;
+      }
+
       const audioBuffer = await audioBlob.arrayBuffer();
       const base64Audio = btoa(
         String.fromCharCode(...new Uint8Array(audioBuffer))
@@ -141,6 +136,11 @@ export default function KnowledgeGraph() {
 
   const generateKnowledgeGraph = async (inputText: string) => {
     try {
+      if (!llmTransformer) {
+        console.error("LLM Transformer not initialized - API key missing");
+        return;
+      }
+
       setIsProcessing(true);
 
       const documents = [new Document({ pageContent: inputText })];
