@@ -1,101 +1,216 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useRef } from "react";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { HumanMessage } from "@langchain/core/messages";
+import AudioRecordingPanel from "../components/AudioRecordingPanel";
+import TopicTreeVisualization from "../components/TopicTreeVisualization";
+import { useTopicTree, TopicNode } from "../hooks/useTopicTree";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [textInput, setTextInput] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const { nodes, edges, initializeTree } = useTopicTree();
+
+  const llm = new ChatGoogleGenerativeAI({
+    model: "gemini-2.0-flash",
+    apiKey: process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
+  });
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/wav",
+        });
+        stream.getTracks().forEach((track) => track.stop());
+        await processAudioToText(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Error starting recording:", error);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setIsTranscribing(true);
+    }
+  };
+
+  const handleMicClick = () => {
+    if (isRecording) {
+      stopRecording();
+    } else if (!isTranscribing) {
+      startRecording();
+    }
+  };
+
+  const processAudioToText = async (audioBlob: Blob) => {
+    try {
+      const audioBuffer = await audioBlob.arrayBuffer();
+      const base64Audio = btoa(
+        String.fromCharCode(...new Uint8Array(audioBuffer))
+      );
+
+      const transcriptionMessage = new HumanMessage({
+        content: [
+          {
+            type: "text",
+            text: "Transcribe this audio. Return only the transcribed text without any additional formatting or explanations.",
+          },
+          { type: "media", data: base64Audio, mimeType: "audio/wav" },
+        ],
+      });
+
+      const transcriptionResponse = await llm.invoke([transcriptionMessage]);
+      const transcribedText = transcriptionResponse.content as string;
+
+      setTextInput(transcribedText);
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const processText = async (inputText: string) => {
+    if (!inputText.trim()) return;
+
+    setIsProcessing(true);
+    try {
+      const topicExtractionPrompt = `
+Extract a hierarchical topic tree from this text. Include ONLY explicitly mentioned topics and concepts.
+
+EXTRACTION RULES:
+- Include ONLY topics actually mentioned in the text
+- Maintain logical hierarchy and grouping
+- Capture specific values, measurements, and names within appropriate categories
+- Do NOT add unmentioned topics or infer content
+
+HIERARCHY GUIDELINES:
+- Group related information under logical main topics
+- Place specific values and names as subtopics under relevant categories
+- Create natural hierarchy depth based on content complexity
+
+WHAT TO CAPTURE:
+- Main concepts and themes as top-level topics
+- Specific details, values, and names as subtopics under relevant main topics
+- Individual measurements, names, or values as deeper subtopics when they belong together
+
+HIERARCHY STRUCTURE:
+- Main topics: Core themes/areas explicitly discussed (e.g., "Physical Characteristics", "Orbital Properties") 
+- Subtopics: Specific aspects within themes (e.g., "Size", "Moons", "Orbital Period")
+- Sub-subtopics: Individual values, names, or detailed breakdowns (e.g., "2,106 miles", "Phobos")
+- Create as many levels as needed to properly organize the information
+
+ID FORMAT:
+- Use descriptive, lowercase IDs with underscores (e.g., "app_performance", "payment_systems")
+- Make IDs hierarchical: main_topic -> main_topic_subtopic -> main_topic_subtopic_detail
+
+ACCURACY SCORING:
+- 0.9-1.0: Topic discussed with significant detail or emphasis
+- 0.7-0.9: Topic clearly mentioned with context
+- 0.5-0.7: Topic briefly mentioned but clearly stated
+- 0.3-0.5: Topic implied or indirectly referenced
+
+JSON STRUCTURE:
+{
+  "id": "main_topic_name",
+  "topic": "Main Topic Title",
+  "accuracy": 0.95,
+  "subtopics": [
+    {
+      "id": "main_topic_specific_item",
+      "topic": "Specific Item Name",
+      "accuracy": 0.85,
+      "subtopics": []
+    }
+  ]
+}
+
+REQUIREMENTS:
+- Organize information hierarchically with logical grouping
+- Include ALL specifically named items, values, and measurements within appropriate categories
+- Create natural hierarchy depth based on content complexity
+- Do NOT hallucinate or add unmentioned topics
+- Use consistent "subtopics" field name at all levels
+
+Return ONLY the JSON object. No explanations, no additional text, no formatting markers.
+
+Text: "${inputText}"
+      `;
+
+      const topicMessage = new HumanMessage({
+        content: [{ type: "text", text: topicExtractionPrompt }],
+      });
+
+      const topicResponse = await llm.invoke([topicMessage]);
+      const topicJsonString = topicResponse.content as string;
+
+      const cleanJsonString = topicJsonString
+        .replace(/```json\n?/, "")
+        .replace(/```\n?$/, "")
+        .trim();
+      const topicTree: TopicNode = JSON.parse(cleanJsonString);
+
+      initializeTree(topicTree);
+    } catch (error) {
+      console.error("Error processing text:", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleTextSubmit = () => {
+    if (textInput.trim()) {
+      processText(textInput.trim());
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleTextSubmit();
+    }
+  };
+
+  return (
+    <div className="h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+      <div className="h-full flex">
+        <AudioRecordingPanel
+          textInput={textInput}
+          setTextInput={setTextInput}
+          isRecording={isRecording}
+          isProcessing={isProcessing}
+          isTranscribing={isTranscribing}
+          onMicClick={handleMicClick}
+          onTextSubmit={handleTextSubmit}
+          onKeyDown={handleKeyDown}
+        />
+        <TopicTreeVisualization nodes={nodes} edges={edges} />
+      </div>
     </div>
   );
 }
