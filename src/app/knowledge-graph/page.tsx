@@ -37,7 +37,8 @@ export default function KnowledgeGraph() {
 
   const llm = new ChatGoogleGenerativeAI({
     model: "gemini-2.0-flash",
-    apiKey: process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
+    apiKey:
+      process.env.GOOGLE_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
   });
 
   const llmTransformer = new LLMGraphTransformer({
