@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Node, Edge } from "@xyflow/react";
 
 export interface TopicNode {
@@ -40,72 +40,75 @@ export const useTopicTree = () => {
     return Math.max(minNodeWidth, childrenWidth);
   };
 
-  const convertTreeToFlow = (
-    topicNode: TopicNode,
-    parentId: string | null = null,
-    x = 0,
-    y = 0
-  ): { nodes: Node[]; edges: Edge[] } => {
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
+  const convertTreeToFlow = useCallback(
+    (
+      topicNode: TopicNode,
+      parentId: string | null = null,
+      x = 0,
+      y = 0
+    ): { nodes: Node[]; edges: Edge[] } => {
+      const nodes: Node[] = [];
+      const edges: Edge[] = [];
 
-    const currentNode: Node = {
-      id: topicNode.id,
-      type: "topicNode",
-      data: {
-        label: topicNode.topic,
-        accuracy: topicNode.accuracy,
-        hasChildren: topicNode.subtopics && topicNode.subtopics.length > 0,
-        isExpanded: expandedNodes.has(topicNode.id),
-        onNodeClick: handleNodeClick,
-      },
-      position: { x, y },
-    };
-    nodes.push(currentNode);
+      const currentNode: Node = {
+        id: topicNode.id,
+        type: "topicNode",
+        data: {
+          label: topicNode.topic,
+          accuracy: topicNode.accuracy,
+          hasChildren: topicNode.subtopics && topicNode.subtopics.length > 0,
+          isExpanded: expandedNodes.has(topicNode.id),
+          onNodeClick: handleNodeClick,
+        },
+        position: { x, y },
+      };
+      nodes.push(currentNode);
 
-    if (parentId) {
-      edges.push({
-        id: `e_${parentId}_${topicNode.id}`,
-        source: parentId,
-        target: topicNode.id,
-        type: "smoothstep",
-        style: { stroke: "#6b7280", strokeWidth: 2 },
-      });
-    }
+      if (parentId) {
+        edges.push({
+          id: `e_${parentId}_${topicNode.id}`,
+          source: parentId,
+          target: topicNode.id,
+          type: "smoothstep",
+          style: { stroke: "#6b7280", strokeWidth: 2 },
+        });
+      }
 
-    if (
-      expandedNodes.has(topicNode.id) &&
-      topicNode.subtopics &&
-      topicNode.subtopics.length > 0
-    ) {
-      const childY = y + 150;
+      if (
+        expandedNodes.has(topicNode.id) &&
+        topicNode.subtopics &&
+        topicNode.subtopics.length > 0
+      ) {
+        const childY = y + 150;
 
-      const subtreeWidths = topicNode.subtopics.map((subtopic) =>
-        calculateSubtreeWidth(subtopic)
-      );
-      const totalWidth = subtreeWidths.reduce((sum, width) => sum + width, 0);
-
-      let currentX = x - totalWidth / 2;
-
-      topicNode.subtopics.forEach((subtopic, index) => {
-        const subtreeX = currentX + subtreeWidths[index] / 2;
-
-        const { nodes: childNodes, edges: childEdges } = convertTreeToFlow(
-          subtopic,
-          topicNode.id,
-          subtreeX,
-          childY
+        const subtreeWidths = topicNode.subtopics.map((subtopic) =>
+          calculateSubtreeWidth(subtopic)
         );
+        const totalWidth = subtreeWidths.reduce((sum, width) => sum + width, 0);
 
-        nodes.push(...childNodes);
-        edges.push(...childEdges);
+        let currentX = x - totalWidth / 2;
 
-        currentX += subtreeWidths[index];
-      });
-    }
+        topicNode.subtopics.forEach((subtopic, index) => {
+          const subtreeX = currentX + subtreeWidths[index] / 2;
 
-    return { nodes, edges };
-  };
+          const { nodes: childNodes, edges: childEdges } = convertTreeToFlow(
+            subtopic,
+            topicNode.id,
+            subtreeX,
+            childY
+          );
+
+          nodes.push(...childNodes);
+          edges.push(...childEdges);
+
+          currentX += subtreeWidths[index];
+        });
+      }
+
+      return { nodes, edges };
+    },
+    [expandedNodes]
+  );
 
   useEffect(() => {
     if (fullTopicTree) {

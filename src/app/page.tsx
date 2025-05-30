@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage } from "@langchain/core/messages";
 import AudioRecordingPanel from "../components/AudioRecordingPanel";
@@ -12,26 +12,27 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [textInput, setTextInput] = useState("");
+  const [llm, setLlm] = useState<ChatGoogleGenerativeAI | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   const { nodes, edges, initializeTree } = useTopicTree();
 
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
-
-  const llm = useMemo(() => {
-    if (!apiKey) {
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+    if (apiKey) {
+      const llmInstance = new ChatGoogleGenerativeAI({
+        model: "gemini-2.0-flash",
+        apiKey: apiKey,
+      });
+      setLlm(llmInstance);
+    } else {
       console.error(
         "No API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in Vercel environment variables."
       );
-      return null;
     }
-    return new ChatGoogleGenerativeAI({
-      model: "gemini-2.0-flash",
-      apiKey: apiKey,
-    });
-  }, [apiKey]);
+  }, []);
 
   const startRecording = async () => {
     try {

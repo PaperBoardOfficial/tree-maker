@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage } from "@langchain/core/messages";
 import { Document } from "@langchain/core/documents";
@@ -31,31 +31,32 @@ export default function KnowledgeGraph() {
   const [textInput, setTextInput] = useState("");
   const [nodes, setNodes] = useState<Node[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [llm, setLlm] = useState<ChatGoogleGenerativeAI | null>(null);
+  const [llmTransformer, setLlmTransformer] =
+    useState<LLMGraphTransformer | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+    if (apiKey) {
+      const llmInstance = new ChatGoogleGenerativeAI({
+        model: "gemini-2.0-flash",
+        apiKey: apiKey,
+      });
+      setLlm(llmInstance);
 
-  const llm = useMemo(() => {
-    if (!apiKey) {
+      const transformerInstance = new LLMGraphTransformer({
+        llm: llmInstance,
+      });
+      setLlmTransformer(transformerInstance);
+    } else {
       console.error(
         "No API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in Vercel environment variables."
       );
-      return null;
     }
-    return new ChatGoogleGenerativeAI({
-      model: "gemini-2.0-flash",
-      apiKey: apiKey,
-    });
-  }, [apiKey]);
-
-  const llmTransformer = useMemo(() => {
-    if (!llm) return null;
-    return new LLMGraphTransformer({
-      llm: llm,
-    });
-  }, [llm]);
+  }, []);
 
   const startRecording = async () => {
     try {
