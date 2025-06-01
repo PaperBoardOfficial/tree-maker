@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage } from "@langchain/core/messages";
+import { AssemblyAI } from "assemblyai";
 import AudioRecordingPanel from "../components/AudioRecordingPanel";
 import TopicTreeVisualization from "../components/TopicTreeVisualization";
 import { useTopicTree, TopicNode } from "../hooks/useTopicTree";
@@ -13,6 +14,7 @@ export default function Home() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [llm, setLlm] = useState<ChatGoogleGenerativeAI | null>(null);
+  const [assemblyClient, setAssemblyClient] = useState<AssemblyAI | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -20,16 +22,29 @@ export default function Home() {
   const { nodes, edges, initializeTree } = useTopicTree();
 
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
-    if (apiKey) {
+    const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+    const assemblyApiKey = process.env.NEXT_PUBLIC_ASSEMBLYAI_API_KEY;
+
+    if (googleApiKey) {
       const llmInstance = new ChatGoogleGenerativeAI({
         model: "gemini-2.0-flash",
-        apiKey: apiKey,
+        apiKey: googleApiKey,
       });
       setLlm(llmInstance);
     } else {
       console.error(
-        "No API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in Vercel environment variables."
+        "No Google API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in environment variables."
+      );
+    }
+
+    if (assemblyApiKey) {
+      const client = new AssemblyAI({
+        apiKey: assemblyApiKey,
+      });
+      setAssemblyClient(client);
+    } else {
+      console.error(
+        "No AssemblyAI API key found. Make sure NEXT_PUBLIC_ASSEMBLYAI_API_KEY is set in environment variables."
       );
     }
   }, []);
@@ -80,31 +95,43 @@ export default function Home() {
 
   const processAudioToText = async (audioBlob: Blob, mimeType?: string) => {
     try {
-      if (!llm) {
-        console.error("LLM not initialized - API key missing");
+      if (!assemblyClient) {
+        console.error("AssemblyAI client not initialized - API key missing");
         return;
       }
 
-      const audioBuffer = await audioBlob.arrayBuffer();
-      const base64Audio = btoa(
-        String.fromCharCode(...new Uint8Array(audioBuffer))
-      );
-
+      // Determine the correct file extension based on MIME type
       const audioMimeType = mimeType || audioBlob.type || "audio/wav";
+      let fileExtension = ".wav"; // default
 
-      const transcriptionMessage = new HumanMessage({
-        content: [
-          {
-            type: "text",
-            text: "Transcribe this audio. Return only the transcribed text without any additional formatting or explanations.",
-          },
-          { type: "media", data: base64Audio, mimeType: audioMimeType },
-        ],
+      if (audioMimeType.includes("mp3") || audioMimeType.includes("mpeg")) {
+        fileExtension = ".mp3";
+      } else if (
+        audioMimeType.includes("mp4") ||
+        audioMimeType.includes("m4a")
+      ) {
+        fileExtension = ".m4a";
+      } else if (audioMimeType.includes("ogg")) {
+        fileExtension = ".ogg";
+      } else if (audioMimeType.includes("flac")) {
+        fileExtension = ".flac";
+      } else if (audioMimeType.includes("aac")) {
+        fileExtension = ".aac";
+      } else if (audioMimeType.includes("webm")) {
+        fileExtension = ".webm";
+      }
+
+      // Convert blob to file with correct extension
+      const audioFile = new File([audioBlob], `audio${fileExtension}`, {
+        type: audioMimeType,
       });
 
-      const transcriptionResponse = await llm.invoke([transcriptionMessage]);
-      const transcribedText = transcriptionResponse.content as string;
+      // Direct transcription with AssemblyAI
+      const transcript = await assemblyClient.transcripts.transcribe({
+        audio: audioFile,
+      });
 
+      const transcribedText = transcript.text || "";
       setTextInput(transcribedText);
     } catch (error) {
       console.error("Error transcribing audio:", error);
