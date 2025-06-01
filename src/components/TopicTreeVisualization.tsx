@@ -23,6 +23,9 @@ const TopicTreeVisualization = ({
         nodes={nodes}
         edges={edges}
         fitView
+        fitViewOptions={{
+          maxZoom: 0.8,
+        }}
         className="bg-gray-50 dark:bg-gray-900"
         proOptions={{ hideAttribution: true }}
         nodeTypes={nodeTypes}

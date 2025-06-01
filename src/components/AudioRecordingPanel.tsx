@@ -1,6 +1,7 @@
 "use client";
 
-import { Mic, Square, ArrowRight } from "lucide-react";
+import { Mic, Square, ArrowRight, Upload } from "lucide-react";
+import { useRef } from "react";
 
 interface AudioRecordingPanelProps {
   textInput: string;
@@ -11,6 +12,7 @@ interface AudioRecordingPanelProps {
   onMicClick: () => void;
   onTextSubmit: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  onFileUpload: (file: File) => void;
 }
 
 const AudioRecordingPanel = ({
@@ -22,9 +24,39 @@ const AudioRecordingPanel = ({
   onMicClick,
   onTextSubmit,
   onKeyDown,
+  onFileUpload,
 }: AudioRecordingPanelProps) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type.startsWith("audio/")) {
+        onFileUpload(file);
+      } else {
+        alert("Please select an audio file");
+      }
+      e.target.value = "";
+    }
+  };
+
   return (
     <div className="w-96 h-full bg-gray-800 border-r border-gray-600 p-4 flex flex-col">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
       {/* Text Input Area */}
       <div className="mb-4 flex-1 flex flex-col">
         <textarea
@@ -66,6 +98,16 @@ const AudioRecordingPanel = ({
             ) : (
               <Mic className="w-4 h-4" />
             )}
+          </button>
+
+          {/* Upload Button */}
+          <button
+            onClick={handleFileClick}
+            disabled={isProcessing || isTranscribing || isRecording}
+            className="flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 bg-purple-600 hover:bg-purple-700 text-white shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Upload Audio File"
+          >
+            <Upload className="w-4 h-4" />
           </button>
 
           {/* Recording/Processing Indicator */}

@@ -76,7 +76,7 @@ export default function KnowledgeGraph() {
           type: "audio/wav",
         });
         stream.getTracks().forEach((track) => track.stop());
-        await processAudioToText(audioBlob);
+        await processAudioToText(audioBlob, "audio/wav");
       };
 
       mediaRecorder.start();
@@ -102,7 +102,7 @@ export default function KnowledgeGraph() {
     }
   };
 
-  const processAudioToText = async (audioBlob: Blob) => {
+  const processAudioToText = async (audioBlob: Blob, mimeType?: string) => {
     try {
       if (!llm) {
         console.error("LLM not initialized - API key missing");
@@ -114,13 +114,15 @@ export default function KnowledgeGraph() {
         String.fromCharCode(...new Uint8Array(audioBuffer))
       );
 
+      const audioMimeType = mimeType || audioBlob.type || "audio/wav";
+
       const transcriptionMessage = new HumanMessage({
         content: [
           {
             type: "text",
             text: "Transcribe this audio. Return only the transcribed text without any additional formatting or explanations.",
           },
-          { type: "media", data: base64Audio, mimeType: "audio/wav" },
+          { type: "media", data: base64Audio, mimeType: audioMimeType },
         ],
       });
 
@@ -207,6 +209,16 @@ export default function KnowledgeGraph() {
     }
   };
 
+  const handleFileUpload = async (file: File) => {
+    setIsTranscribing(true);
+    try {
+      await processAudioToText(file, file.type);
+    } catch (error) {
+      console.error("Error processing uploaded file:", error);
+      setIsTranscribing(false);
+    }
+  };
+
   return (
     <div className="h-screen bg-gray-900 text-gray-100">
       <div className="h-full flex">
@@ -219,6 +231,7 @@ export default function KnowledgeGraph() {
           onMicClick={handleMicClick}
           onTextSubmit={handleTextSubmit}
           onKeyDown={handleKeyDown}
+          onFileUpload={handleFileUpload}
         />
         <div className="flex-1 h-full flex flex-col">
           {/* Graph Container */}

@@ -52,7 +52,7 @@ export default function Home() {
           type: "audio/wav",
         });
         stream.getTracks().forEach((track) => track.stop());
-        await processAudioToText(audioBlob);
+        await processAudioToText(audioBlob, "audio/wav");
       };
 
       mediaRecorder.start();
@@ -78,7 +78,7 @@ export default function Home() {
     }
   };
 
-  const processAudioToText = async (audioBlob: Blob) => {
+  const processAudioToText = async (audioBlob: Blob, mimeType?: string) => {
     try {
       if (!llm) {
         console.error("LLM not initialized - API key missing");
@@ -90,13 +90,15 @@ export default function Home() {
         String.fromCharCode(...new Uint8Array(audioBuffer))
       );
 
+      const audioMimeType = mimeType || audioBlob.type || "audio/wav";
+
       const transcriptionMessage = new HumanMessage({
         content: [
           {
             type: "text",
             text: "Transcribe this audio. Return only the transcribed text without any additional formatting or explanations.",
           },
-          { type: "media", data: base64Audio, mimeType: "audio/wav" },
+          { type: "media", data: base64Audio, mimeType: audioMimeType },
         ],
       });
 
@@ -107,6 +109,16 @@ export default function Home() {
     } catch (error) {
       console.error("Error transcribing audio:", error);
     } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setIsTranscribing(true);
+    try {
+      await processAudioToText(file, file.type);
+    } catch (error) {
+      console.error("Error processing uploaded file:", error);
       setIsTranscribing(false);
     }
   };
@@ -229,6 +241,7 @@ Text: "${inputText}"
           onMicClick={handleMicClick}
           onTextSubmit={handleTextSubmit}
           onKeyDown={handleKeyDown}
+          onFileUpload={handleFileUpload}
         />
         <TopicTreeVisualization nodes={nodes} edges={edges} />
       </div>
