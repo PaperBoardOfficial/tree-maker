@@ -22,7 +22,7 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  const { nodes, edges, initializeTree } = useTopicTree();
+  const { topicTree, initializeTree } = useTopicTree();
 
   useEffect(() => {
     const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
@@ -358,7 +358,7 @@ Text: "${inputText}"
           onKeyDown={handleKeyDown}
           onFileUpload={handleFileUpload}
         />
-        <TopicTreeVisualization nodes={nodes} edges={edges} />
+        <TopicTreeVisualization topicTree={topicTree} />
       </div>
     </div>
   );
