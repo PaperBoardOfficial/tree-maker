@@ -12,8 +12,11 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [llm, setLlm] = useState<ChatGoogleGenerativeAI | null>(null);
+  const [validationLlm, setValidationLlm] =
+    useState<ChatGoogleGenerativeAI | null>(null);
   const [assemblyClient, setAssemblyClient] = useState<AssemblyAI | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -31,6 +34,12 @@ export default function Home() {
         apiKey: googleApiKey,
       });
       setLlm(llmInstance);
+
+      const validationLlmInstance = new ChatGoogleGenerativeAI({
+        model: "gemini-2.5-flash-preview",
+        apiKey: googleApiKey,
+      });
+      setValidationLlm(validationLlmInstance);
     } else {
       console.error(
         "No Google API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in environment variables."
@@ -150,6 +159,78 @@ export default function Home() {
     }
   };
 
+  const validateTopicTree = async (
+    topicTree: TopicNode,
+    originalText: string
+  ): Promise<TopicNode> => {
+    if (!validationLlm) {
+      console.error("Validation LLM not initialized - API key missing");
+      return topicTree;
+    }
+
+    try {
+      const validationPrompt = `
+You are a precision topic extraction validator. Your task is to review and correct the extracted topic tree against the original text.
+
+VALIDATION CHECKLIST:
+✓ ACCURACY: Every topic must be explicitly mentioned in the original text
+✓ COMPLETENESS: No significant topics should be missing  
+✓ HIERARCHY: Parent-child relationships must be logical and appropriate
+✓ PRECISION: Accuracy scores should reflect actual topic prominence (0.3-1.0 scale)
+✓ CONSISTENCY: IDs should follow pattern: main_topic → main_topic_subtopic → main_topic_subtopic_detail
+
+CORRECTION PRIORITIES:
+1. REMOVE any topics not actually present in the text (hallucinations)
+2. ADD any major topics that were missed
+3. REORGANIZE hierarchy if parent-child relationships are illogical  
+4. ADJUST accuracy scores based on how much detail/emphasis each topic receives
+5. FIX malformed IDs to follow consistent naming pattern
+
+ACCURACY SCORE GUIDE:
+• 0.9-1.0: Topic discussed extensively with multiple details
+• 0.7-0.9: Topic clearly mentioned with context and explanation  
+• 0.5-0.7: Topic mentioned with some detail
+• 0.3-0.5: Topic briefly mentioned or implied
+
+ORIGINAL TEXT:
+"${originalText}"
+
+EXTRACTED TOPIC TREE:
+${JSON.stringify(topicTree, null, 2)}
+
+INSTRUCTIONS:
+- Make surgical corrections - don't change what's already accurate
+- Preserve good hierarchical structure where it exists
+- Ensure every topic can be traced back to specific text mentions
+- Return only the corrected JSON, no explanations or formatting
+
+Return the validated topic tree:
+      `;
+
+      const validationMessage = new HumanMessage({
+        content: [{ type: "text", text: validationPrompt }],
+      });
+
+      const validationResponse = await validationLlm.invoke([
+        validationMessage,
+      ]);
+      const validatedJsonString = validationResponse.content as string;
+
+      const cleanValidatedJsonString = validatedJsonString
+        .replace(/```json\n?/, "")
+        .replace(/```\n?$/, "")
+        .trim();
+
+      const validatedTopicTree: TopicNode = JSON.parse(
+        cleanValidatedJsonString
+      );
+      return validatedTopicTree;
+    } catch (error) {
+      console.error("Error validating topic tree:", error);
+      return topicTree;
+    }
+  };
+
   const processText = async (inputText: string) => {
     if (!inputText.trim()) return;
 
@@ -235,11 +316,17 @@ Text: "${inputText}"
         .trim();
       const topicTree: TopicNode = JSON.parse(cleanJsonString);
 
-      initializeTree(topicTree);
+      setIsValidating(true);
+      setIsProcessing(false);
+
+      const validatedTopicTree = await validateTopicTree(topicTree, inputText);
+
+      initializeTree(validatedTopicTree);
     } catch (error) {
       console.error("Error processing text:", error);
     } finally {
       setIsProcessing(false);
+      setIsValidating(false);
     }
   };
 
@@ -265,6 +352,7 @@ Text: "${inputText}"
           isRecording={isRecording}
           isProcessing={isProcessing}
           isTranscribing={isTranscribing}
+          isValidating={isValidating}
           onMicClick={handleMicClick}
           onTextSubmit={handleTextSubmit}
           onKeyDown={handleKeyDown}
