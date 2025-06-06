@@ -1,39 +1,44 @@
-# Voice-to-Knowledge Graph Application
+# Voice-to-Topic Tree Application
 
-A real-time voice-to-knowledge graph application that converts speech into structured knowledge graphs using Gemini AI and **NeoVis.js** for graph visualization.
+A real-time voice-to-topic extraction application that converts speech into hierarchical topic trees using Gemini AI with LLM validation and a beautiful custom visualization interface.
 
 ## Features
 
 - 🎤 **Voice Recording**: Real-time voice input with browser MediaRecorder API
-- 🧠 **AI-Powered Extraction**: Uses Google Gemini to extract entities and relationships
-- 📊 **Graph Visualization**: Real-time visualization using **NeoVis.js**
-- 🔄 **Real-time Updates**: Auto-refresh visualization when new data is added
-- 💾 **Session State**: Maintains context across multiple voice inputs
-- 🗄️ **Neo4j Ready**: Configured for Neo4j database integration
-- ⚡ **Fallback Visualization**: Custom HTML visualization when Neo4j unavailable
+- 📁 **File Upload**: Support for various audio formats (MP3, WAV, M4A, OGG, FLAC, AAC, WebM)
+- 🗣️ **Speech-to-Text**: High-quality transcription using AssemblyAI
+- 🧠 **AI-Powered Extraction**: Uses Google Gemini 2.0-flash to extract hierarchical topics
+- ✅ **LLM Validation**: Gemini 2.5-flash-preview validates and refines extracted topics
+- 🎨 **Beautiful Visualization**: Custom circular node interface with 23 soft pastel colors
+- 📱 **Mobile-Friendly**: Vertical drill-down interface optimized for all screen sizes
+- 🎯 **Interactive Navigation**: Click nodes to explore, select children to drill down
+- 🌈 **Random Colors**: Each topic gets a beautiful random soft color for visual variety
 
 ## Architecture
 
-### NeoVis.js Integration
+### Dual-LLM Processing Pipeline
 
-This application uses **NeoVis.js** - the official Neo4j visualization library that renders graphs directly from Neo4j databases in web browsers.
+**Topic Extraction → Validation → Visualization**
 
-**Key Benefits:**
+1. **Gemini 2.0-flash**: Initial hierarchical topic extraction from text
+2. **Gemini 2.5-flash-preview**: Validates accuracy, completeness, and structure
+3. **Custom Interface**: Renders topics in an intuitive drill-down format
 
-- **Direct Neo4j Connection**: Queries Neo4j directly using Cypher
-- **Interactive Graphs**: Pan, zoom, drag nodes, hover tooltips
-- **Real-time Updates**: Automatic re-rendering when data changes
-- **Customizable**: Node colors, sizes, relationships styling
-- **Performance**: Handles large graphs efficiently
+### Custom Visualization Interface
 
-### Real-time Strategy
+**Split Layout Design:**
 
-To handle real-time updates (since NeoVis.js doesn't auto-refresh):
+- **Left Panel (50%)**: Vertical linear flow with circular topic nodes
+- **Right Panel (50%)**: Interactive children selection area
+- **No External Dependencies**: Built from scratch, no React Flow or graph libraries
 
-1. **React State Triggers**: `refreshKey` state changes trigger re-initialization
-2. **Smart Re-rendering**: Only re-render when entities/relationships change
-3. **Fallback Mode**: Custom HTML visualization when Neo4j unavailable
-4. **Smooth Transitions**: Visual feedback during graph updates
+### Real-time Processing Flow
+
+1. **Audio Input** → MediaRecorder API or file upload
+2. **Transcription** → AssemblyAI converts speech to text
+3. **Topic Extraction** → Gemini 2.0-flash extracts hierarchical structure
+4. **Validation** → Gemini 2.5-flash-preview validates and corrects
+5. **Visualization** → Custom interface renders interactive topic tree
 
 ## Setup Instructions
 
@@ -43,42 +48,13 @@ To handle real-time updates (since NeoVis.js doesn't auto-refresh):
 npm install
 ```
 
-The key packages installed:
+Key packages:
 
-- `neovis.js` - Neo4j graph visualization
-- `neo4j-driver` - Neo4j database connectivity
 - `@langchain/google-genai` - Gemini AI integration
+- `assemblyai` - Speech-to-text transcription
+- `lucide-react` - Icons for the interface
 
-### 2. Neo4j Setup (Optional)
-
-#### Option A: Neo4j Desktop (Recommended)
-
-1. Download [Neo4j Desktop](https://neo4j.com/download/)
-2. Create a new project and database
-3. Start the database and note the connection details
-
-#### Option B: Neo4j AuraDB (Cloud)
-
-1. Go to [Neo4j AuraDB](https://neo4j.com/cloud/aura/)
-2. Create a free instance
-3. Save the connection credentials
-
-#### Option C: Docker
-
-```bash
-docker run \
-    --name neo4j \
-    -p7474:7474 -p7687:7687 \
-    -d \
-    -v $HOME/neo4j/data:/data \
-    -v $HOME/neo4j/logs:/logs \
-    -v $HOME/neo4j/import:/var/lib/neo4j/import \
-    -v $HOME/neo4j/plugins:/plugins \
-    --env NEO4J_AUTH=neo4j/yourpassword \
-    neo4j:latest
-```
-
-### 3. Environment Configuration
+### 2. Environment Configuration
 
 Create a `.env.local` file:
 
@@ -86,14 +62,23 @@ Create a `.env.local` file:
 # Google Gemini API Key (Required)
 NEXT_PUBLIC_GOOGLE_API_KEY=your-google-api-key-here
 
-# Neo4j Connection (Optional - will use fallback visualization if not provided)
-NEXT_PUBLIC_NEO4J_URI=bolt://localhost:7687
-NEXT_PUBLIC_NEO4J_USER=neo4j
-NEXT_PUBLIC_NEO4J_PASSWORD=yourpassword
-
-# For Neo4j AuraDB, use:
-# NEXT_PUBLIC_NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
+# AssemblyAI API Key (Required)
+NEXT_PUBLIC_ASSEMBLYAI_API_KEY=your-assemblyai-api-key-here
 ```
+
+### 3. Get API Keys
+
+#### Google Gemini API
+
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Create a new API key
+3. Add to `.env.local` as `NEXT_PUBLIC_GOOGLE_API_KEY`
+
+#### AssemblyAI API
+
+1. Go to [AssemblyAI](https://www.assemblyai.com/)
+2. Sign up and get your API key
+3. Add to `.env.local` as `NEXT_PUBLIC_ASSEMBLYAI_API_KEY`
 
 ### 4. Run the Application
 
@@ -103,133 +88,69 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Usage Modes
+## Usage
 
-### Mode 1: With Neo4j (Full Features)
+### Input Methods
 
-- Real Neo4j database storage
-- NeoVis.js interactive graph visualization
-- Persistent data across sessions
-- Advanced graph analytics
+1. **Text Input**: Type directly in the left panel textarea
+2. **Voice Recording**: Click the microphone button to record
+3. **File Upload**: Click upload button to process audio files
 
-### Mode 2: Without Neo4j (Demo Mode)
+### Navigation
 
-- In-memory graph storage
-- Custom HTML visualization
-- Session-only data
-- Perfect for testing and demos
+1. **Start**: Process text/audio to see the root topic
+2. **Explore**: Click circular nodes to see their children in the right panel
+3. **Drill Down**: Click children to add them to the linear path
+4. **Navigate Back**: Click any previous node to return to that level
 
-## How NeoVis.js Works
+### Interface Elements
 
-### Configuration
+- **Circular Nodes**: Main topics displayed as colorful circles
+- **Accuracy Badges**: Show AI confidence levels (percentage)
+- **Children Indicators**: Small badges showing number of subtopics
+- **Connection Lines**: Visual links between parent and child topics
+- **Right Panel**: Interactive area for selecting and exploring children
 
-```javascript
-const config = {
-  container_id: "neovis-container",
-  server_url: "bolt://localhost:7687",
-  server_user: "neo4j",
-  server_password: "password",
-  labels: {
-    Person: { caption: "name", size: "pagerank" },
-    Organization: { caption: "name", size: "pagerank" },
-  },
-  relationships: {
-    WORKS_AT: { thickness: "weight", caption: true },
-  },
-  initial_cypher: "MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 100",
-};
-```
+## Visual Design
 
-### Real-time Updates
+### Color Palette (23 Soft Colors)
 
-```javascript
-// Trigger re-render when data changes
-setRefreshKey((prev) => prev + 1);
+**Greens**: Emerald, Lime, Green, Teal (various shades)
+**Blues**: Cyan, Sky, Blue, Indigo (various shades)  
+**Purples**: Violet, Purple, Fuchsia (various shades)
+**Pinks**: Pink, Rose (multiple tones)
+**Warm**: Red, Orange, Amber, Yellow (soft versions)
+**Light Variants**: Ultra-light versions of core colors
 
-// NeoVis re-initialization
-useEffect(() => {
-  if (sessionEntities.length > 0) {
-    initializeNeovis();
-  }
-}, [refreshKey]);
-```
+### Node Design
 
-## Graph Data Flow
+- **Size**: 128px diameter circles
+- **Random Colors**: Each topic gets a unique soft pastel color
+- **Hover Effects**: Scale animation on interaction
+- **Selection State**: White ring around active node
+- **Typography**: Dark text on light backgrounds for readability
 
-1. **Voice Input** → MediaRecorder API
-2. **Speech-to-Text** → Mock/Web Speech API
-3. **Text Processing** → Gemini LLM extracts entities/relationships
-4. **Conflict Resolution** → Smart merging with existing graph
-5. **Neo4j Update** → Cypher queries store data
-6. **Visualization Refresh** → NeoVis.js re-renders graph
+## LLM Processing Details
 
-## Advanced Features
+### Topic Extraction Prompt
 
-### Entity Types & Styling
+- Focuses on explicitly mentioned topics only
+- Creates logical hierarchical structures
+- Captures specific values, measurements, and names
+- Assigns accuracy scores based on content prominence
+- Uses consistent ID naming patterns
 
-- **Person**: Blue nodes, medium size
-- **Organization**: Green nodes, large size
-- **Concept**: Purple nodes, small size
-- **Technology**: Orange nodes, medium size
+### Validation Prompt
 
-### Relationship Types
+- Reviews extraction accuracy against original text
+- Checks for completeness and missing topics
+- Validates hierarchical relationships
+- Adjusts accuracy scores for better precision
+- Removes hallucinated or incorrect topics
 
-- **WORKS_AT**: Professional relationships
-- **LIKES**: Preference relationships
-- **DEVELOPS**: Creation relationships
-- **COLLEAGUE_OF**: Peer relationships
+### Accuracy Scoring (0.3-1.0 scale)
 
-### Smart Context Management
-
-- Tracks recent entities for context
-- Filters relevant entities by keywords
-- Prevents LLM token limit issues
-- Maintains conversation continuity
-
-## Development Notes
-
-### Current Implementation Status
-
-- ✅ NeoVis.js integration complete
-- ✅ Real-time refresh mechanism
-- ✅ Fallback visualization
-- ✅ TypeScript support
-- 🔄 Mock speech-to-text (ready for real implementation)
-- 🔄 Neo4j Cypher queries (logged, ready to execute)
-
-### Next Development Steps
-
-1. **Real Speech-to-Text**: Replace mock with Web Speech API
-2. **Neo4j Cypher Execution**: Activate database writes
-3. **Advanced Graph Features**: Clustering, filtering, search
-4. **Performance Optimization**: Large graph handling
-5. **Export Features**: JSON, GraphML, CSV export
-
-## Troubleshooting
-
-### NeoVis.js Issues
-
-- **Graph not rendering**: Check Neo4j connection in browser console
-- **Blank visualization**: Verify Cypher query returns data
-- **Performance slow**: Limit nodes with `LIMIT` in Cypher queries
-
-### Common Fixes
-
-- Ensure Neo4j allows remote connections
-- Check CORS settings for Neo4j browser access
-- Verify credentials in `.env.local`
-- Use fallback mode for development without Neo4j
-
-## Why NeoVis.js?
-
-**Advantages over alternatives:**
-
-- **Native Neo4j Integration**: Direct Cypher query support
-- **Professional Quality**: Enterprise-grade visualization
-- **Customizable**: Full control over appearance
-- **Interactive**: Built-in graph interaction features
-- **Maintained**: Official Neo4j project
-
-**vs. React Flow**: More graph-database specific
-**vs. D3.js**: Less development overhead
-**vs. Vis.js**: Better Neo4j integration
+- **0.9-1.0**: Extensively discussed with multiple details
+- **0.7-0.9**: Clearly mentioned with context
+- **0.5-0.7**: Mentioned with some detail
+- **0.3-0.5**: Briefly mentioned or implied
