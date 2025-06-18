@@ -7,6 +7,13 @@ import { AssemblyAI } from "assemblyai";
 import AudioRecordingPanel from "../components/AudioRecordingPanel";
 import TopicTreeVisualization from "../components/TopicTreeVisualization";
 import { useTopicTree, TopicNode } from "../hooks/useTopicTree";
+import {
+  DEFAULT_EXTRACTION_PROMPT,
+  DEFAULT_VALIDATION_PROMPT,
+  DEFAULT_EXTRACTION_MODEL,
+  DEFAULT_VALIDATION_MODEL,
+  OPENROUTER_MODELS,
+} from "../lib/constants";
 
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
@@ -27,23 +34,49 @@ export default function Home() {
   useEffect(() => {
     const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
     const assemblyApiKey = process.env.NEXT_PUBLIC_ASSEMBLYAI_API_KEY;
+    const openrouterApiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 
-    if (googleApiKey) {
-      const llmInstance = new ChatGoogleGenerativeAI({
-        model: "gemini-2.0-flash",
-        apiKey: googleApiKey,
-      });
-      setLlm(llmInstance);
+    const extractionModel =
+      localStorage.getItem("extractionModel") || DEFAULT_EXTRACTION_MODEL;
+    const validationModel =
+      localStorage.getItem("validationModel") || DEFAULT_VALIDATION_MODEL;
 
-      const validationLlmInstance = new ChatGoogleGenerativeAI({
-        model: "gemini-2.5-flash-preview",
-        apiKey: googleApiKey,
-      });
-      setValidationLlm(validationLlmInstance);
+    if (extractionModel.startsWith("gemini")) {
+      if (!googleApiKey) {
+        console.error(
+          "No Google API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in environment variables for Google models."
+        );
+      } else {
+        setLlm(new ChatGoogleGenerativeAI({ model: extractionModel, apiKey: googleApiKey }));
+      }
+    } else if (OPENROUTER_MODELS.includes(extractionModel)) {
+      if (!openrouterApiKey) {
+        console.error(
+          "No OpenRouter API key found. Make sure NEXT_PUBLIC_OPENROUTER_API_KEY is set in environment variables for OpenRouter models."
+        );
+      }
+      // LLM instance is not set for OpenRouter models as they are called directly via fetch
     } else {
-      console.error(
-        "No Google API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in environment variables."
-      );
+      console.error("Unsupported extraction model:", extractionModel);
+    }
+
+    if (validationModel.startsWith("gemini")) {
+      if (!googleApiKey) {
+        console.error(
+          "No Google API key found. Make sure NEXT_PUBLIC_GOOGLE_API_KEY is set in environment variables for Google models."
+        );
+      } else {
+        setValidationLlm(new ChatGoogleGenerativeAI({ model: validationModel, apiKey: googleApiKey }));
+      }
+    } else if (OPENROUTER_MODELS.includes(validationModel)) {
+      if (!openrouterApiKey) {
+        console.error(
+          "No OpenRouter API key found. Make sure NEXT_PUBLIC_OPENROUTER_API_KEY is set in environment variables for OpenRouter models."
+        );
+      }
+      // Validation LLM instance is not set for OpenRouter models as they are called directly via fetch
+    } else {
+      console.error("Unsupported validation model:", validationModel);
     }
 
     if (assemblyApiKey) {
@@ -163,58 +196,48 @@ export default function Home() {
     topicTree: TopicNode,
     originalText: string
   ): Promise<TopicNode> => {
-    if (!validationLlm) {
-      console.error("Validation LLM not initialized - API key missing");
-      return topicTree;
-    }
+    const validationModel =
+      localStorage.getItem("validationModel") || DEFAULT_VALIDATION_MODEL;
+    const openrouterApiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 
     try {
-      const validationPrompt = `
-You are a precision topic extraction validator. Your task is to review and correct the extracted topic tree against the original text.
+      const validationPrompt = getValidationPrompt(topicTree, originalText);
+      let validatedJsonString: string;
 
-VALIDATION CHECKLIST:
-✓ ACCURACY: Every topic must be explicitly mentioned in the original text
-✓ COMPLETENESS: No significant topics should be missing  
-✓ HIERARCHY: Parent-child relationships must be logical and appropriate
-✓ PRECISION: Accuracy scores should reflect actual topic prominence (0.3-1.0 scale)
-✓ CONSISTENCY: IDs should follow pattern: main_topic → main_topic_subtopic → main_topic_subtopic_detail
-
-CORRECTION PRIORITIES:
-1. REMOVE any topics not actually present in the text (hallucinations)
-2. ADD any major topics that were missed
-3. REORGANIZE hierarchy if parent-child relationships are illogical  
-4. ADJUST accuracy scores based on how much detail/emphasis each topic receives
-5. FIX malformed IDs to follow consistent naming pattern
-
-ACCURACY SCORE GUIDE:
-• 0.9-1.0: Topic discussed extensively with multiple details
-• 0.7-0.9: Topic clearly mentioned with context and explanation  
-• 0.5-0.7: Topic mentioned with some detail
-• 0.3-0.5: Topic briefly mentioned or implied
-
-ORIGINAL TEXT:
-"${originalText}"
-
-EXTRACTED TOPIC TREE:
-${JSON.stringify(topicTree, null, 2)}
-
-INSTRUCTIONS:
-- Make surgical corrections - don't change what's already accurate
-- Preserve good hierarchical structure where it exists
-- Ensure every topic can be traced back to specific text mentions
-- Return only the corrected JSON, no explanations or formatting
-
-Return the validated topic tree:
-      `;
-
-      const validationMessage = new HumanMessage({
-        content: [{ type: "text", text: validationPrompt }],
-      });
-
-      const validationResponse = await validationLlm.invoke([
-        validationMessage,
-      ]);
-      const validatedJsonString = validationResponse.content as string;
+      if (validationModel.startsWith("gemini")) {
+        if (!validationLlm) {
+          console.error("Validation LLM not initialized - API key missing");
+          return topicTree;
+        }
+        const validationMessage = new HumanMessage({
+          content: [{ type: "text", text: validationPrompt }],
+        });
+        const validationResponse = await validationLlm.invoke([
+          validationMessage,
+        ]);
+        validatedJsonString = validationResponse.content as string;
+      } else if (OPENROUTER_MODELS.includes(validationModel)) {
+        if (!openrouterApiKey) {
+          console.error("OpenRouter API key not found.");
+          return topicTree;
+        }
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openrouterApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: validationModel,
+            messages: [{ role: "user", content: validationPrompt }],
+          }),
+        });
+        const data = await response.json();
+        validatedJsonString = data.choices[0].message.content;
+      } else {
+        console.error("Unsupported validation model:", validationModel);
+        return topicTree;
+      }
 
       const cleanValidatedJsonString = validatedJsonString
         .replace(/```json\n?/, "")
@@ -234,81 +257,47 @@ Return the validated topic tree:
   const processText = async (inputText: string) => {
     if (!inputText.trim()) return;
 
-    if (!llm) {
-      console.error("LLM not initialized - API key missing");
-      return;
-    }
+    const extractionModel =
+      localStorage.getItem("extractionModel") || DEFAULT_EXTRACTION_MODEL;
+    const openrouterApiKey = process.env.NEXT_PUBLIC_OPENROUTER_API_KEY;
 
     setIsProcessing(true);
     try {
-      const topicExtractionPrompt = `
-Extract a hierarchical topic tree from this text. Include ONLY explicitly mentioned topics and concepts.
+      const topicExtractionPrompt = getExtractionPrompt(inputText);
+      let topicJsonString: string;
 
-EXTRACTION RULES:
-- Include ONLY topics actually mentioned in the text
-- Maintain logical hierarchy and grouping
-- Capture specific values, measurements, and names within appropriate categories
-- Do NOT add unmentioned topics or infer content
-
-HIERARCHY GUIDELINES:
-- Group related information under logical main topics
-- Place specific values and names as subtopics under relevant categories
-- Create natural hierarchy depth based on content complexity
-
-WHAT TO CAPTURE:
-- Main concepts and themes as top-level topics
-- Specific details, values, and names as subtopics under relevant main topics
-- Individual measurements, names, or values as deeper subtopics when they belong together
-
-HIERARCHY STRUCTURE:
-- Main topics: Core themes/areas explicitly discussed (e.g., "Physical Characteristics", "Orbital Properties") 
-- Subtopics: Specific aspects within themes (e.g., "Size", "Moons", "Orbital Period")
-- Sub-subtopics: Individual values, names, or detailed breakdowns (e.g., "2,106 miles", "Phobos")
-- Create as many levels as needed to properly organize the information
-
-ID FORMAT:
-- Use descriptive, lowercase IDs with underscores (e.g., "app_performance", "payment_systems")
-- Make IDs hierarchical: main_topic -> main_topic_subtopic -> main_topic_subtopic_detail
-
-ACCURACY SCORING:
-- 0.9-1.0: Topic discussed with significant detail or emphasis
-- 0.7-0.9: Topic clearly mentioned with context
-- 0.5-0.7: Topic briefly mentioned but clearly stated
-- 0.3-0.5: Topic implied or indirectly referenced
-
-JSON STRUCTURE:
-{
-  "id": "main_topic_name",
-  "topic": "Main Topic Title",
-  "accuracy": 0.95,
-  "subtopics": [
-    {
-      "id": "main_topic_specific_item",
-      "topic": "Specific Item Name",
-      "accuracy": 0.85,
-      "subtopics": []
-    }
-  ]
-}
-
-REQUIREMENTS:
-- Organize information hierarchically with logical grouping
-- Include ALL specifically named items, values, and measurements within appropriate categories
-- Create natural hierarchy depth based on content complexity
-- Do NOT hallucinate or add unmentioned topics
-- Use consistent "subtopics" field name at all levels
-
-Return ONLY the JSON object. No explanations, no additional text, no formatting markers.
-
-Text: "${inputText}"
-      `;
-
-      const topicMessage = new HumanMessage({
-        content: [{ type: "text", text: topicExtractionPrompt }],
-      });
-
-      const topicResponse = await llm.invoke([topicMessage]);
-      const topicJsonString = topicResponse.content as string;
+      if (extractionModel.startsWith("gemini")) {
+        if (!llm) {
+          console.error("LLM not initialized - API key missing");
+          return;
+        }
+        const topicMessage = new HumanMessage({
+          content: [{ type: "text", text: topicExtractionPrompt }],
+        });
+        const topicResponse = await llm.invoke([topicMessage]);
+        topicJsonString = topicResponse.content as string;
+      } else if (OPENROUTER_MODELS.includes(extractionModel)) {
+        if (!openrouterApiKey) {
+          console.error("OpenRouter API key not found.");
+          return;
+        }
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openrouterApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: extractionModel,
+            messages: [{ role: "user", content: topicExtractionPrompt }],
+          }),
+        });
+        const data = await response.json();
+        topicJsonString = data.choices[0].message.content;
+      } else {
+        console.error("Unsupported extraction model:", extractionModel);
+        return;
+      }
 
       const cleanJsonString = topicJsonString
         .replace(/```json\n?/, "")
@@ -362,4 +351,26 @@ Text: "${inputText}"
       </div>
     </div>
   );
+}
+
+function getExtractionPrompt(inputText: string) {
+  if (typeof window !== "undefined") {
+    const userPrompt = localStorage.getItem("extractionPrompt");
+    if (userPrompt) return userPrompt.replace("${inputText}", inputText);
+  }
+  return DEFAULT_EXTRACTION_PROMPT.replace("${inputText}", inputText);
+}
+
+function getValidationPrompt(topicTree: TopicNode, originalText: string) {
+  if (typeof window !== "undefined") {
+    const userPrompt = localStorage.getItem("validationPrompt");
+    if (userPrompt)
+      return userPrompt
+        .replace("${originalText}", originalText)
+        .replace("${topicTree}", JSON.stringify(topicTree, null, 2));
+  }
+  return DEFAULT_VALIDATION_PROMPT.replace(
+    "${originalText}",
+    originalText
+  ).replace("${topicTree}", JSON.stringify(topicTree, null, 2));
 }
