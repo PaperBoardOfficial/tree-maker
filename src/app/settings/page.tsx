@@ -129,7 +129,7 @@ Please provide an improved version of the current prompt based on the feedback. 
         return;
       }
 
-      setExtractionPrompt(enhancedPromptText.trim());
+      setExtractionPrompt(enhancedPromptText.replace(/^```(?:json|javascript|typescript|)\s*|\s*```$/g, '').trim());
       alert("Prompt enhanced successfully!");
     } catch (error) {
       console.error("Error enhancing prompt:", error);
