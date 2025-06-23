@@ -1,19 +1,21 @@
 export const DEFAULT_EXTRACTION_PROMPT = `Extract a hierarchical topic tree from the following text. Include ALL explicitly mentioned topics, concepts, named entities, questions, and hypothetical scenarios - even if they are not factual statements.
 
 EXTRACTION RULES:
-- Include every topic, concept, named entity, or subject that is mentioned, even if it appears in a question, suggestion, or hypothetical statement.
-- Maintain logical hierarchy and grouping.
+- Include every topic, concept, named entity, or subject that is mentioned, even if it appears in a statement of preference, question, suggestion, or hypothetical statement.
+- Maintain logical hierarchy and grouping, reflecting relationships between topics, e.g., preferences, attributes.
 - Capture specific values, measurements, and names within appropriate categories.
-- Do NOT add unmentioned topics or infer content.
+- Do NOT add unmentioned topics or infer content beyond direct relationships explicitly mentioned in the text.
 
 HIERARCHY GUIDELINES:
 - Group related information under logical main topics.
 - Place specific values and names as subtopics under relevant categories.
+- Represent preferences and attributes as subtopics that connect the subject and the object of the preference or attribute. For example, "Michael likes cats" should be represented as Michael -> likes -> cats.
 - Create natural hierarchy depth based on content complexity.
 
 WHAT TO CAPTURE:
 - Main concepts, themes, and named entities as top-level topics (e.g., "Cats", "Space", "Mars", "People").
 - Questions and hypothetical scenarios as topics (e.g., "Living on Mars", "Cats going to space").
+- Statements of preference (e.g., "likes cats") as a hierarchical relationship between the subject and object of the preference.
 - Specific details, values, and names as subtopics under relevant main topics.
 - Individual measurements, names, or values as deeper subtopics when they belong together.
 
@@ -110,6 +112,7 @@ REQUIREMENTS:
 - Organize information hierarchically with logical grouping.
 - Include ALL specifically named items, values, and measurements within appropriate categories.
 - Include all named entities, questions, and hypothetical scenarios as topics.
+- Represent preferences and attributes as hierarchical relationships between the subject and object.
 - Create natural hierarchy depth based on content complexity.
 - Do NOT hallucinate or add unmentioned topics.
 - Use consistent "subtopics" field name at all levels.
