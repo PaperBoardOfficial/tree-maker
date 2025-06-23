@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HumanMessage } from "@langchain/core/messages";
 import { AssemblyAI } from "assemblyai";
+import { Settings } from "lucide-react";
 import AudioRecordingPanel from "../components/AudioRecordingPanel";
 import TopicTreeVisualization from "../components/TopicTreeVisualization";
 import { useTopicTree, TopicNode } from "../hooks/useTopicTree";
@@ -334,6 +336,11 @@ export default function Home() {
 
   return (
     <div className="h-screen bg-gray-900 text-gray-100">
+      <div className="absolute top-4 right-4 z-10">
+        <Link href="/settings">
+          <Settings className="w-8 h-8 text-gray-400 hover:text-blue-400 cursor-pointer" />
+        </Link>
+      </div>
       <div className="h-full flex">
         <AudioRecordingPanel
           textInput={textInput}
